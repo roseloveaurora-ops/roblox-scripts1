@@ -1,4 +1,4 @@
--- // Artnes GUI v34.1 (Combat & Pearl Target System)
+-- // Artnes GUI v34.2 (Combat & Fixed Pearl Target System)
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
@@ -507,51 +507,76 @@ Player.Idled:Connect(function()
 end)
 
 -- ================= COMBAT MODULES =================
-CreateToggle(CombatTab, "Aim Assist", 0, function(isEnabled)
-    -- Просто кнопка
-end)
+CreateToggle(CombatTab, "Aim Assist", 0, function(isEnabled) end)
+CreateToggle(CombatTab, "Attack Aura", 45, function(isEnabled) end)
+CreateToggle(CombatTab, "Triggerbot", 90, function(isEnabled) end)
 
-CreateToggle(CombatTab, "Attack Aura", 45, function(isEnabled)
-    -- Просто кнопка
-end)
-
-CreateToggle(CombatTab, "Triggerbot", 90, function(isEnabled)
-    -- Просто кнопка
-end)
-
--- PEARL TARGET (Авто-кидание перла за врагом в радиусе 15 блоков)
+-- PEARL TARGET (Исправленный авто-бросок перла следом за игроком в радиусе 15 блоков)
 local pearlTargetEnabled = false
 
 CreateToggle(CombatTab, "Pearl Target", 135, function(isEnabled)
     pearlTargetEnabled = isEnabled
     if pearlTargetEnabled then
         task.spawn(function()
-            -- Отслеживаем создание перлов / телепортацию игроков в радиусе 15 блоков
             while pearlTargetEnabled do
-                task.wait(0.05)
+                task.wait(0.1)
                 local char = Player.Character
                 local root = char and char:FindFirstChild("HumanoidRootPart")
-                if root then
+                local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+                
+                if root and humanoid and humanoid.Health > 0 then
                     for _, p in ipairs(Players:GetPlayers()) do
                         if p ~= Player and not isFriend(p) and p.Character then
                             local pRoot = p.Character:FindFirstChild("HumanoidRootPart")
                             if pRoot then
                                 local dist = (pRoot.Position - root.Position).Magnitude
                                 if dist <= 15 then
-                                    -- Проверяем, совершил ли игрок рывок/телепортацию или заспавнил предмет (перл) рядом
-                                    -- Симулируем бросок эндер-перла / активацию инструмента перла в сторону цели
-                                    pcall(function()
-                                        local backpack = Player:FindFirstChildOfClass("Backpack")
-                                        local tool = char:FindFirstChildOfClass("Tool") or (backpack and backpack:FindFirstChild("Pearl") or backpack and backpack:FindFirstChild("EnderPearl"))
-                                        if tool and tool.Parent == backpack then
-                                            tool.Parent = char -- берем в руки если в инвентаре
+                                    -- Ищем перл в рюкзаке или инвентаре по ключевым словам
+                                    local backpack = Player:FindFirstChildOfClass("Backpack")
+                                    local pearlTool = nil
+                                    
+                                    -- Проверяем руки
+                                    for _, item in ipairs(char:GetChildren()) do
+                                        if item:IsA("Tool") then
+                                            local lname = string.lower(item.Name)
+                                            if string.find(lname, "pearl") or string.find(lname, "ender") or string.find(lname, "teleport") then
+                                                pearlTool = item
+                                                break
+                                            end
                                         end
-                                        if tool and tool.Parent == char then
-                                            -- Имитируем клик/активацию перла в сторону позиции врага
-                                            tool:Activate()
+                                    end
+                                    
+                                    -- Проверяем рюкзак, если в руках нет
+                                    if not pearlTool and backpack then
+                                        for _, item in ipairs(backpack:GetChildren()) do
+                                            if item:IsA("Tool") then
+                                                local lname = string.lower(item.Name)
+                                                if string.find(lname, "pearl") or string.find(lname, "ender") or string.find(lname, "teleport") then
+                                                    pearlTool = item
+                                                    break
+                                                end
+                                            end
                                         end
-                                    end)
-                                    task.wait(1) -- кулдаун чтобы не спамить перлы бесконечно
+                                    end
+                                    
+                                    if pearlTool then
+                                        -- Достаем в руку, если он в рюкзаке
+                                        if pearlTool.Parent == backpack then
+                                            pearlTool.Parent = char
+                                            task.wait(0.05)
+                                        end
+                                        
+                                        if pearlTool.Parent == char then
+                                            -- Поворачиваем камеру/персонажа точно на врага
+                                            pcall(function()
+                                                workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, pRoot.Position)
+                                            end)
+                                            
+                                            -- Активируем перл (триггерим бросок)
+                                            pearlTool:Activate()
+                                            task.wait(1.2) -- Задержка от спама
+                                        end
+                                    end
                                 end
                             end
                         end
@@ -818,419 +843,4 @@ refreshQuickButtons()
 -- ================= MISC (ДРУЗЬЯ, ANTI AFK, CONFIG) =================
 local FriendFrame = Instance.new("Frame")
 FriendFrame.Size = UDim2.new(1, -20, 0, 40)
-FriendFrame.Position = UDim2.new(0, 10, 0, 0)
-FriendFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
-FriendFrame.Parent = MiscTab
-Instance.new("UICorner", FriendFrame).CornerRadius = UDim.new(0, 8)
-
-local FriendLabel = Instance.new("TextLabel")
-FriendLabel.Size = UDim2.new(0, 90, 1, 0)
-FriendLabel.Position = UDim2.new(0, 5, 0, 0)
-FriendLabel.BackgroundTransparency = 1
-FriendLabel.Text = "Add Friend"
-FriendLabel.Font = Enum.Font.GothamBold
-FriendLabel.TextSize = 12
-FriendLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-FriendLabel.TextXAlignment = Enum.TextXAlignment.Left
-FriendLabel.Parent = FriendFrame
-
-local FriendInput = Instance.new("TextBox")
-FriendInput.Size = UDim2.new(0, 250, 0, 25)
-FriendInput.Position = UDim2.new(0, 95, 0.5, -12)
-FriendInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-FriendInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-FriendInput.Text = ""
-FriendInput.PlaceholderText = "Enter nickname..."
-FriendInput.Parent = FriendFrame
-Instance.new("UICorner", FriendInput).CornerRadius = UDim.new(0, 5)
-
-local AddButton = Instance.new("TextButton")
-AddButton.Size = UDim2.new(0, 90, 0, 25)
-AddButton.Position = UDim2.new(0, 355, 0.5, -12)
-AddButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-AddButton.Text = "Add"
-AddButton.Font = Enum.Font.GothamBold
-AddButton.TextSize = 12
-AddButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-AddButton.Parent = FriendFrame
-Instance.new("UICorner", AddButton).CornerRadius = UDim.new(0, 5)
-
-local FriendListFrame = Instance.new("Frame")
-FriendListFrame.Size = UDim2.new(1, -20, 0, 35)
-FriendListFrame.Position = UDim2.new(0, 10, 0, 45)
-FriendListFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
-FriendListFrame.Parent = MiscTab
-Instance.new("UICorner", FriendListFrame).CornerRadius = UDim.new(0, 8)
-
-local FriendListLabel = Instance.new("TextLabel")
-FriendListLabel.Size = UDim2.new(1, -10, 1, 0)
-FriendListLabel.Position = UDim2.new(0, 5, 0, 0)
-FriendListLabel.BackgroundTransparency = 1
-FriendListLabel.Text = "Friends: None"
-FriendListLabel.Font = Enum.Font.Gotham
-FriendListLabel.TextSize = 11
-FriendListLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-FriendListLabel.TextXAlignment = Enum.TextXAlignment.Left
-FriendListLabel.Parent = FriendListFrame
-
-local ClearButton = Instance.new("TextButton")
-ClearButton.Size = UDim2.new(1, -20, 0, 30)
-ClearButton.Position = UDim2.new(0, 10, 0, 85)
-ClearButton.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
-ClearButton.Text = "Clear Friends"
-ClearButton.Font = Enum.Font.GothamBold
-ClearButton.TextSize = 12
-ClearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ClearButton.Parent = MiscTab
-Instance.new("UICorner", ClearButton).CornerRadius = UDim.new(0, 8)
-
-local function UpdateFriendList()
-    FriendListLabel.Text = (#friendNames == 0) and "Friends: None" or ("Friends: " .. table.concat(friendNames, ", "))
-end
-
-AddButton.MouseButton1Click:Connect(function()
-    local name = FriendInput.Text
-    if name and name ~= "" then
-        table.insert(friendNames, name)
-        FriendInput.Text = ""
-        UpdateFriendList()
-        local targetPlayer = FindPlayerByName(name)
-        if targetPlayer then RefreshESPColor(targetPlayer) end
-    end
-end)
-
-ClearButton.MouseButton1Click:Connect(function()
-    friendNames = {}
-    UpdateFriendList()
-    if espEnabled then
-        for _, player in pairs(Players:GetPlayers()) do RefreshESPColor(player) end
-    end
-end)
-
-CreateToggle(MiscTab, "Anti AFK", 120, function(isEnabled)
-    antiAFKEnabled = isEnabled
-end)
-
--- ================= СИСТЕМА КОНФИГОВ (CFG) В MISC =================
-local function GenerateRandomID()
-    local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    local r = function() local i = math.random(1, #chars) return string.sub(chars, i, i) end
-    return "artnes-"..r()..r()..r()..r()
-end
-
-local function SerializeConfig()
-    local cfgData = {
-        Toggles = {},
-        Sliders = {},
-        Binds = {},
-        Friends = friendNames,
-        OreSelection = currentSelection
-    }
-    for name, handler in pairs(toggleHandlers) do cfgData.Toggles[name] = handler.Get() end
-    for name, handler in pairs(sliderHandlers) do cfgData.Sliders[name] = handler.Get() end
-    for _, b in pairs(binds) do
-        if b.key then cfgData.Binds[b.name] = b.key.Name end
-    end
-    return cfgData
-end
-
-local function DeserializeConfig(cfgData)
-    if type(cfgData) ~= "table" then return false end
-    if cfgData.Friends and type(cfgData.Friends) == "table" then
-        friendNames = cfgData.Friends
-        UpdateFriendList()
-    end
-    if cfgData.OreSelection and oreVariants[cfgData.OreSelection] then
-        currentSelection = cfgData.OreSelection
-        refreshQuickButtons()
-    end
-    if cfgData.Sliders and type(cfgData.Sliders) == "table" then
-        for name, val in pairs(cfgData.Sliders) do
-            if sliderHandlers[name] then sliderHandlers[name].Set(val) end
-        end
-    end
-    if cfgData.Toggles and type(cfgData.Toggles) == "table" then
-        for name, state in pairs(cfgData.Toggles) do
-            if toggleHandlers[name] then toggleHandlers[name].Set(state) end
-        end
-    end
-    if cfgData.Binds and type(cfgData.Binds) == "table" then
-        for _, b in pairs(binds) do
-            if cfgData.Binds[b.name] then
-                pcall(function()
-                    b.key = Enum.KeyCode[cfgData.Binds[b.name]]
-                    b.BindBtn.Text = "[" .. b.key.Name .. "]"
-                end)
-            end
-        end
-        UpdateBindMenu()
-    end
-    return true
-end
-
-local function SaveLocalCFG()
-    local data = SerializeConfig()
-    local s, json = pcall(function() return HttpService:JSONEncode(data) end)
-    if s and writefile then
-        pcall(function() writefile("Artnes_Config.json", json) end)
-    end
-end
-
-local function LoadLocalCFG()
-    if isfile and isfile("Artnes_Config.json") then
-        local s, content = pcall(function() return readfile("Artnes_Config.json") end)
-        if s and content then
-            local s2, data = pcall(function() return HttpService:JSONDecode(content) end)
-            if s2 and data then return DeserializeConfig(data) end
-        end
-    end
-    return false
-end
-
--- UI ЭКСПОРТА КОНФИГА (Позиция 165)
-local ExportFrame = Instance.new("Frame")
-ExportFrame.Size = UDim2.new(1, -20, 0, 75)
-ExportFrame.Position = UDim2.new(0, 10, 0, 165)
-ExportFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
-ExportFrame.Parent = MiscTab
-Instance.new("UICorner", ExportFrame).CornerRadius = UDim.new(0, 8)
-
-local ExportLabel = Instance.new("TextLabel")
-ExportLabel.Size = UDim2.new(1, -10, 0, 20)
-ExportLabel.Position = UDim2.new(0, 5, 0, 3)
-ExportLabel.BackgroundTransparency = 1
-ExportLabel.Text = "EXPORT CONFIG (CLOUD / LOCAL)"
-ExportLabel.Font = Enum.Font.GothamBold
-ExportLabel.TextSize = 11
-ExportLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-ExportLabel.TextXAlignment = Enum.TextXAlignment.Left
-ExportLabel.Parent = ExportFrame
-
-local ExportKeyBox = Instance.new("TextBox")
-ExportKeyBox.Size = UDim2.new(0.6, 0, 0, 22)
-ExportKeyBox.Position = UDim2.new(0, 5, 0, 25)
-ExportKeyBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-ExportKeyBox.TextColor3 = Color3.fromRGB(0, 255, 200)
-ExportKeyBox.Font = Enum.Font.GothamBold
-ExportKeyBox.TextSize = 11
-ExportKeyBox.Text = "ARTNES_MAIN"
-ExportKeyBox.TextEditable = false
-ExportKeyBox.Parent = ExportFrame
-Instance.new("UICorner", ExportKeyBox).CornerRadius = UDim.new(0, 4)
-
-local CopyBtn = Instance.new("TextButton")
-CopyBtn.Size = UDim2.new(0.35, -5, 0, 22)
-CopyBtn.Position = UDim2.new(0.65, 5, 0, 25)
-CopyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-CopyBtn.Text = "COPY"
-CopyBtn.Font = Enum.Font.GothamBold
-CopyBtn.TextSize = 11
-CopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CopyBtn.Parent = ExportFrame
-Instance.new("UICorner", CopyBtn).CornerRadius = UDim.new(0, 4)
-
-local GenBtn = Instance.new("TextButton")
-GenBtn.Size = UDim2.new(0.5, -5, 0, 22)
-GenBtn.Position = UDim2.new(0, 5, 0, 50)
-GenBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-GenBtn.Text = "GENERATE CFG"
-GenBtn.Font = Enum.Font.GothamBold
-GenBtn.TextSize = 11
-GenBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-GenBtn.Parent = ExportFrame
-Instance.new("UICorner", GenBtn).CornerRadius = UDim.new(0, 4)
-
-local SaveLocalBtn = Instance.new("TextButton")
-SaveLocalBtn.Size = UDim2.new(0.45, 0, 0, 22)
-SaveLocalBtn.Position = UDim2.new(0.55, 0, 0, 50)
-SaveLocalBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-SaveLocalBtn.Text = "SAVE LOCAL"
-SaveLocalBtn.Font = Enum.Font.GothamBold
-SaveLocalBtn.TextSize = 11
-SaveLocalBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-SaveLocalBtn.Parent = ExportFrame
-Instance.new("UICorner", SaveLocalBtn).CornerRadius = UDim.new(0, 4)
-
-GenBtn.MouseButton1Click:Connect(function()
-    SaveLocalCFG()
-    local newKey = GenerateRandomID()
-    if type(HttpReq) == "function" then
-        GenBtn.Text = "UPLOADING..."
-        task.spawn(function()
-            local cfgJson = HttpService:JSONEncode(SerializeConfig())
-            local s, r = pcall(function()
-                return HttpReq({
-                    Url = "https://bytebin.lucko.me/post",
-                    Method = "POST",
-                    Headers = {["Content-Type"] = "application/json; charset=utf-8"},
-                    Body = cfgJson
-                })
-            end)
-            if s and r and r.Body then
-                local s2, res = pcall(function() return HttpService:JSONDecode(r.Body) end)
-                if s2 and res and res.key then newKey = res.key end
-            end
-            ExportKeyBox.Text = newKey
-            GenBtn.Text = "GENERATE CFG"
-        end)
-    else
-        ExportKeyBox.Text = newKey
-    end
-end)
-
-CopyBtn.MouseButton1Click:Connect(function()
-    if setclipboard then setclipboard(ExportKeyBox.Text) end
-end)
-SaveLocalBtn.MouseButton1Click:Connect(function()
-    SaveLocalCFG()
-    SaveLocalBtn.Text = "SAVED!"
-    task.delay(1, function() SaveLocalBtn.Text = "SAVE LOCAL" end)
-end)
-
--- UI ИМПОРТА КОНФИГА (Позиция 245)
-local ImportFrame = Instance.new("Frame")
-ImportFrame.Size = UDim2.new(1, -20, 0, 75)
-ImportFrame.Position = UDim2.new(0, 10, 0, 245)
-ImportFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
-ImportFrame.Parent = MiscTab
-Instance.new("UICorner", ImportFrame).CornerRadius = UDim.new(0, 8)
-
-local ImportLabel = Instance.new("TextLabel")
-ImportLabel.Size = UDim2.new(1, -10, 0, 20)
-ImportLabel.Position = UDim2.new(0, 5, 0, 3)
-ImportLabel.BackgroundTransparency = 1
-ImportLabel.Text = "IMPORT CONFIG (CLOUD / LOCAL)"
-ImportLabel.Font = Enum.Font.GothamBold
-ImportLabel.TextSize = 11
-ImportLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-ImportLabel.TextXAlignment = Enum.TextXAlignment.Left
-ImportLabel.Parent = ImportFrame
-
-local ImportKeyBox = Instance.new("TextBox")
-ImportKeyBox.Size = UDim2.new(0.6, 0, 0, 22)
-ImportKeyBox.Position = UDim2.new(0, 5, 0, 25)
-ImportKeyBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-ImportKeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-ImportKeyBox.Font = Enum.Font.GothamBold
-ImportKeyBox.TextSize = 11
-ImportKeyBox.PlaceholderText = "Paste key here..."
-ImportKeyBox.Text = ""
-ImportKeyBox.Parent = ImportFrame
-Instance.new("UICorner", ImportKeyBox).CornerRadius = UDim.new(0, 4)
-
-local PasteBtn = Instance.new("TextButton")
-PasteBtn.Size = UDim2.new(0.35, -5, 0, 22)
-PasteBtn.Position = UDim2.new(0.65, 5, 0, 25)
-PasteBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-PasteBtn.Text = "PASTE"
-PasteBtn.Font = Enum.Font.GothamBold
-PasteBtn.TextSize = 11
-PasteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-PasteBtn.Parent = ImportFrame
-Instance.new("UICorner", PasteBtn).CornerRadius = UDim.new(0, 4)
-
-local LoadBtn = Instance.new("TextButton")
-LoadBtn.Size = UDim2.new(0.5, -5, 0, 22)
-LoadBtn.Position = UDim2.new(0, 5, 0, 50)
-LoadBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-LoadBtn.Text = "LOAD CLOUD CFG"
-LoadBtn.Font = Enum.Font.GothamBold
-LoadBtn.TextSize = 11
-LoadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-LoadBtn.Parent = ImportFrame
-Instance.new("UICorner", LoadBtn).CornerRadius = UDim.new(0, 4)
-
-local LoadLocalBtn = Instance.new("TextButton")
-LoadLocalBtn.Size = UDim2.new(0.45, 0, 0, 22)
-LoadLocalBtn.Position = UDim2.new(0.55, 0, 0, 50)
-LoadLocalBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-LoadLocalBtn.Text = "LOAD LOCAL"
-LoadLocalBtn.Font = Enum.Font.GothamBold
-LoadLocalBtn.TextSize = 11
-LoadLocalBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-LoadLocalBtn.Parent = ImportFrame
-Instance.new("UICorner", LoadLocalBtn).CornerRadius = UDim.new(0, 4)
-
-PasteBtn.MouseButton1Click:Connect(function()
-    if getclipboard then
-        local txt = getclipboard()
-        if txt and txt ~= "" then ImportKeyBox.Text = txt end
-    end
-end)
-
-LoadBtn.MouseButton1Click:Connect(function()
-    local key = ImportKeyBox.Text:gsub("%s+", "")
-    if key ~= "" and type(HttpReq) == "function" then
-        LoadBtn.Text = "LOADING..."
-        task.spawn(function()
-            local s, r = pcall(function() return HttpReq({Url = "https://bytebin.lucko.me/" .. key, Method = "GET"}) end)
-            if s and r and (r.StatusCode == 200 or r.StatusCode == 201) and r.Body then
-                local s2, data = pcall(function() return HttpService:JSONDecode(r.Body) end)
-                if s2 and data then
-                    DeserializeConfig(data)
-                    LoadBtn.Text = "SUCCESS!"
-                else
-                    LoadBtn.Text = "DECODE ERR"
-                end
-            else
-                LoadBtn.Text = "NOT FOUND"
-            end
-            task.delay(1.5, function() LoadBtn.Text = "LOAD CLOUD CFG" end)
-        end)
-    end
-end)
-
-LoadLocalBtn.MouseButton1Click:Connect(function()
-    if LoadLocalCFG() then
-        LoadLocalBtn.Text = "LOADED!"
-    else
-        LoadLocalBtn.Text = "NO FILE"
-    end
-    task.delay(1.5, function() LoadLocalBtn.Text = "LOAD LOCAL" end)
-end)
-
--- ================= АВАТАР И ВЫХОД =================
-local AvatarFrame = Instance.new("Frame")
-AvatarFrame.Size = UDim2.new(0, 60, 0, 60)
-AvatarFrame.Position = UDim2.new(0, 10, 1, -70)
-AvatarFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-AvatarFrame.Parent = MainFrame
-Instance.new("UICorner", AvatarFrame).CornerRadius = UDim.new(1, 0)
-
-local AvatarImage = Instance.new("ImageLabel")
-AvatarImage.Size = UDim2.new(1, -10, 1, -10)
-AvatarImage.Position = UDim2.new(0, 5, 0, 5)
-AvatarImage.BackgroundTransparency = 1
-AvatarImage.Parent = AvatarFrame
-Instance.new("UICorner", AvatarImage).CornerRadius = UDim.new(1, 0)
-
-local content = Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-AvatarImage.Image = content
-
-CombatTab.Visible = true
-VisualTab.Visible = false
-MiscTab.Visible = false
-
-local function UnloadCheat()
-    if oreHighlightEnabled then UpdateOreHighlight(false) end
-    pcall(function() workspace.CurrentCamera.FieldOfView = 70 end)
-    RunService:UnbindFromRenderStep("FOV_Changer")
-    if worldColorConnection then worldColorConnection:Disconnect(); worldColorConnection = nil end
-    for _, p in pairs(Players:GetPlayers()) do
-        if p.Character then local h = p.Character:FindFirstChild("ESP_Highlight") if h then h:Destroy() end end
-    end
-    pcall(ResetWorldColor)
-    ScreenGui:Destroy(); TargetScreenGui:Destroy(); BindMenuGUI:Destroy()
-end
-CloseButton.MouseButton1Click:Connect(UnloadCheat)
-
-local guiVisible = true
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.Delete then
-        guiVisible = not guiVisible
-        ScreenGui.Enabled = guiVisible
-    end
-end)
-
-print("[Artnes GUI] v34.1 Loaded! Combat & Pearl Target System Active.")
+FriendFrame.P
