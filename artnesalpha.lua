@@ -843,4 +843,228 @@ refreshQuickButtons()
 -- ================= MISC (ДРУЗЬЯ, ANTI AFK, CONFIG) =================
 local FriendFrame = Instance.new("Frame")
 FriendFrame.Size = UDim2.new(1, -20, 0, 40)
-FriendFrame.P
+FriendFrame.Position = UDim2.new(0, 10, 0, 0)
+FriendFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+FriendFrame.Parent = MiscTab
+Instance.new("UICorner", FriendFrame).CornerRadius = UDim.new(0, 8)
+
+local FriendLabel = Instance.new("TextLabel")
+FriendLabel.Size = UDim2.new(0, 90, 1, 0)
+FriendLabel.Position = UDim2.new(0, 5, 0, 0)
+FriendLabel.BackgroundTransparency = 1
+FriendLabel.Text = "Add Friend"
+FriendLabel.Font = Enum.Font.GothamBold
+FriendLabel.TextSize = 12
+FriendLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+FriendLabel.TextXAlignment = Enum.TextXAlignment.Left
+FriendLabel.Parent = FriendFrame
+
+local FriendInput = Instance.new("TextBox")
+FriendInput.Size = UDim2.new(0, 250, 0, 25)
+FriendInput.Position = UDim2.new(0, 95, 0.5, -12)
+FriendInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+FriendInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+FriendInput.Text = ""
+FriendInput.PlaceholderText = "Enter nickname..."
+FriendInput.Parent = FriendFrame
+Instance.new("UICorner", FriendInput).CornerRadius = UDim.new(0, 5)
+
+local AddButton = Instance.new("TextButton")
+AddButton.Size = UDim2.new(0, 90, 0, 25)
+AddButton.Position = UDim2.new(0, 355, 0.5, -12)
+AddButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+AddButton.Text = "Add"
+AddButton.Font = Enum.Font.GothamBold
+AddButton.TextSize = 12
+AddButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+AddButton.Parent = FriendFrame
+Instance.new("UICorner", AddButton).CornerRadius = UDim.new(0, 5)
+
+local FriendListFrame = Instance.new("Frame")
+FriendListFrame.Size = UDim2.new(1, -20, 0, 35)
+FriendListFrame.Position = UDim2.new(0, 10, 0, 45)
+FriendListFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+FriendListFrame.Parent = MiscTab
+Instance.new("UICorner", FriendListFrame).CornerRadius = UDim.new(0, 8)
+
+local FriendListLabel = Instance.new("TextLabel")
+FriendListLabel.Size = UDim2.new(1, -10, 1, 0)
+FriendListLabel.Position = UDim2.new(0, 5, 0, 0)
+FriendListLabel.BackgroundTransparency = 1
+FriendListLabel.Text = "Friends: None"
+FriendListLabel.Font = Enum.Font.Gotham
+FriendListLabel.TextSize = 11
+FriendListLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+FriendListLabel.TextXAlignment = Enum.TextXAlignment.Left
+FriendListLabel.Parent = FriendListFrame
+
+local ClearButton = Instance.new("TextButton")
+ClearButton.Size = UDim2.new(1, -20, 0, 30)
+ClearButton.Position = UDim2.new(0, 10, 0, 85)
+ClearButton.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+ClearButton.Text = "Clear Friends"
+ClearButton.Font = Enum.Font.GothamBold
+ClearButton.TextSize = 12
+ClearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ClearButton.Parent = MiscTab
+Instance.new("UICorner", ClearButton).CornerRadius = UDim.new(0, 8)
+
+local function UpdateFriendList()
+    FriendListLabel.Text = (#friendNames == 0) and "Friends: None" or ("Friends: " .. table.concat(friendNames, ", "))
+end
+
+AddButton.MouseButton1Click:Connect(function()
+    local name = FriendInput.Text
+    if name and name ~= "" then
+        table.insert(friendNames, name)
+        FriendInput.Text = ""
+        UpdateFriendList()
+        local targetPlayer = FindPlayerByName(name)
+        if targetPlayer then RefreshESPColor(targetPlayer) end
+    end
+end)
+
+ClearButton.MouseButton1Click:Connect(function()
+    friendNames = {}
+    UpdateFriendList()
+    if espEnabled then
+        for _, player in pairs(Players:GetPlayers()) do RefreshESPColor(player) end
+    end
+end)
+
+CreateToggle(MiscTab, "Anti AFK", 120, function(isEnabled)
+    antiAFKEnabled = isEnabled
+end)
+
+-- ================= СИСТЕМА КОНФИГОВ (CFG) В MISC =================
+local function GenerateRandomID()
+    local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    local r = function() local i = math.random(1, #chars) return string.sub(chars, i, i) end
+    return "artnes-"..r()..r()..r()..r()
+end
+
+local function SerializeConfig()
+    local cfgData = {
+        Toggles = {},
+        Sliders = {},
+        Binds = {},
+        Friends = friendNames,
+        OreSelection = currentSelection
+    }
+    for name, handler in pairs(toggleHandlers) do cfgData.Toggles[name] = handler.Get() end
+    for name, handler in pairs(sliderHandlers) do cfgData.Sliders[name] = handler.Get() end
+    for _, b in pairs(binds) do
+        if b.key then cfgData.Binds[b.name] = b.key.Name end
+    end
+    return cfgData
+end
+
+local function DeserializeConfig(cfgData)
+    if type(cfgData) ~= "table" then return false end
+    if cfgData.Friends and type(cfgData.Friends) == "table" then
+        friendNames = cfgData.Friends
+        UpdateFriendList()
+    end
+    if cfgData.OreSelection and oreVariants[cfgData.OreSelection] then
+        currentSelection = cfgData.OreSelection
+        refreshQuickButtons()
+    end
+    if cfgData.Sliders and type(cfgData.Sliders) == "table" then
+        for name, val in pairs(cfgData.Sliders) do
+            if sliderHandlers[name] then sliderHandlers[name].Set(val) end
+        end
+    end
+    if cfgData.Toggles and type(cfgData.Toggles) == "table" then
+        for name, state in pairs(cfgData.Toggles) do
+            if toggleHandlers[name] then toggleHandlers[name].Set(state) end
+        end
+    end
+    if cfgData.Binds and type(cfgData.Binds) == "table" then
+        for _, b in pairs(binds) do
+            if cfgData.Binds[b.name] then
+                pcall(function()
+                    b.key = Enum.KeyCode[cfgData.Binds[b.name]]
+                    b.BindBtn.Text = "[" .. b.key.Name .. "]"
+                end)
+            end
+        end
+        UpdateBindMenu()
+    end
+    return true
+end
+
+local function SaveLocalCFG()
+    local data = SerializeConfig()
+    local s, json = pcall(function() return HttpService:JSONEncode(data) end)
+    if s and writefile then
+        pcall(function() writefile("Artnes_Config.json", json) end)
+    end
+end
+
+local function LoadLocalCFG()
+    if isfile and isfile("Artnes_Config.json") then
+        local s, content = pcall(function() return readfile("Artnes_Config.json") end)
+        if s and content then
+            local s2, data = pcall(function() return HttpService:JSONDecode(content) end)
+            if s2 and data then return DeserializeConfig(data) end
+        end
+    end
+    return false
+end
+
+-- UI ЭКСПОРТА КОНФИГА (Позиция 165)
+local ExportFrame = Instance.new("Frame")
+ExportFrame.Size = UDim2.new(1, -20, 0, 75)
+ExportFrame.Position = UDim2.new(0, 10, 0, 165)
+ExportFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+ExportFrame.Parent = MiscTab
+Instance.new("UICorner", ExportFrame).CornerRadius = UDim.new(0, 8)
+
+local ExportLabel = Instance.new("TextLabel")
+ExportLabel.Size = UDim2.new(1, -10, 0, 20)
+ExportLabel.Position = UDim2.new(0, 5, 0, 3)
+ExportLabel.BackgroundTransparency = 1
+ExportLabel.Text = "EXPORT CONFIG (CLOUD / LOCAL)"
+ExportLabel.Font = Enum.Font.GothamBold
+ExportLabel.TextSize = 11
+ExportLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ExportLabel.TextXAlignment = Enum.TextXAlignment.Left
+ExportLabel.Parent = ExportFrame
+
+local ExportKeyBox = Instance.new("TextBox")
+ExportKeyBox.Size = UDim2.new(0.6, 0, 0, 22)
+ExportKeyBox.Position = UDim2.new(0, 5, 0, 25)
+ExportKeyBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ExportKeyBox.TextColor3 = Color3.fromRGB(0, 255, 200)
+ExportKeyBox.Font = Enum.Font.GothamBold
+ExportKeyBox.TextSize = 11
+ExportKeyBox.Text = "ARTNES_MAIN"
+ExportKeyBox.TextEditable = false
+ExportKeyBox.Parent = ExportFrame
+Instance.new("UICorner", ExportKeyBox).CornerRadius = UDim.new(0, 4)
+
+local CopyBtn = Instance.new("TextButton")
+CopyBtn.Size = UDim2.new(0.35, -5, 0, 22)
+CopyBtn.Position = UDim2.new(0.65, 5, 0, 25)
+CopyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+CopyBtn.Text = "COPY"
+CopyBtn.Font = Enum.Font.GothamBold
+CopyBtn.TextSize = 11
+CopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CopyBtn.Parent = ExportFrame
+Instance.new("UICorner", CopyBtn).CornerRadius = UDim.new(0, 4)
+
+local GenBtn = Instance.new("TextButton")
+GenBtn.Size = UDim2.new(0.5, -5, 0, 22)
+GenBtn.Position = UDim2.new(0, 5, 0, 50)
+GenBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+GenBtn.Text = "GENERATE CFG"
+GenBtn.Font = Enum.Font.GothamBold
+GenBtn.TextSize = 11
+GenBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+GenBtn.Parent = ExportFrame
+Instance.new("UICorner", GenBtn).CornerRadius = UDim.new(0, 4)
+
+local SaveLocalBtn = Instance.new("TextButton")
+SaveLocalBtn.Size = UDim2.new(0.45, 0, 0, 22)
+SaveLocalBtn.Position = UDim2.new(0.55,
